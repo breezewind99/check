@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="dashboard">
+    <!-- :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: INCLUDE ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::  -->
+
+    <!-- ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::  QUERY  ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::  -->
+
+    <!-- 시스템 정보조회 쿼리 -->
+    <select id="tbl_system_select_main_backup" parameterType="map" resultType="map">
+        /* 시스템 정보 조회 */
+		SELECT system_ip,backup_ip FROM tbl_system
+    </select>
+
+    <!-- 모니터링 시스템, 모니터링 코드 정보조회 쿼리 -->
+    <select id="tbl_dash_mon_code_rel_select" parameterType="map" resultType="map">
+        /* 모니터링 시스템, 모니터링 코드 정보조회 */
+		SELECT Mon_System,Mon_Code FROM tbl_dash_mon_code_rel
+    </select>
+
+    <!-- :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: INSERT :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::  -->
+    <insert id="tbl_dash_monlist_insert" parameterType="map">
+        /* 알람 정보 Insert */
+        INSERT INTO tbl_dash_monlist(Mon_System, Mon_Date, Mon_Time, Mon_Local_Phone, Mon_Process, Mon_Alram)
+        VALUES (#{system_code},convert(varchar(8),getdate(),112),replace(CONVERT(CHAR(8), getdate(), 108),':',''), #{local_phone}, #{process}, #{alarm})
+    </insert>
+
+    <!-- :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: UPDATE :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::  -->
+    <update id="tbl_dash_Monitoring_update" parameterType="map">
+        UPDATE tbl_dash_Monitoring
+        SET 
+            Mon_Date = convert(varchar(8),getdate(),112),
+            Mon_Time = replace(CONVERT(CHAR(8), getdate(), 108),':',''),
+            Mon_Cpu = #{cpu},
+            Mon_Mem = #{mem},
+            Mon_Hdd = #{hdd},
+            Mon_Process = #{process},
+            Mon_Check = #{alarm}
+        WHERE Mon_System=#{system_code}
+    </update>
+    <!-- :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: DELETE :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::  -->
+
+
+</mapper>

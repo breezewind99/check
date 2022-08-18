@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE configuration PUBLIC "-//mybatis.org//DTD Config 3.0//EN" "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+
+	<!-- <properties resource="application.properties" />-->
+	<properties resource="resource/application.properties" />
+	<!--
+	<properties resource="org/mybatis/example/config.properties">
+		<property name="driver" value="oracle.jdbc.driver.OracleDriver"/>
+		<property name="url" value="jdbc:oracle:thin:@192.168.0.71:1521:ORCL"/>
+		<property name="username" value="cnet"/>
+		<property name="password" value="~!cnet2580!~"/>
+	</properties>
+	-->
+	<settings>
+     	<!--      	
+     		<setting name="cacheEnabled" value="true" />
+     		oracle false 처리
+     	-->
+		<setting name="cacheEnabled" value="false" />
+		<setting name="lazyLoadingEnabled" value="true" />
+		<setting name="useGeneratedKeys" value="true" />
+		<setting name="defaultExecutorType" value="SIMPLE" />
+		<setting name="defaultStatementTimeout" value="3000" />
+		<setting name="jdbcTypeForNull" value="NULL" />			<!-- oracle null value -->
+		<setting name="callSettersOnNulls" value="true"/>		<!-- value null 일 경우 컬럼 누락되는 현상 발생으로 추가 -->
+	</settings>
+
+ 	<!-- 환경 설정 -->
+	<environments default="crec_master">
+		<!-- master db -->
+		<environment id="crec_master">
+			<transactionManager type="JDBC"/>
+			<!-- 데이터베이스 접속 정보 -->
+			<dataSource type="POOLED">
+			  <property name="driver" value="${driver}"/>
+			  <property name="url" value="${url}"/>
+			  <property name="username" value="${username}"/>
+			  <property name="password" value="${password}"/>
+			</dataSource>
+		</environment>
+	</environments>
+   	
+	<!-- SQLMAPPER (environments 하단에 위치한다.) -->
+	<mappers>
+		<!-- POSTGRE -->
+		<mapper resource="resource/mapper/dashboard.xml"/>
+	</mappers>
+</configuration>
