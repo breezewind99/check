@@ -6,8 +6,8 @@ import java.io.InputStream;
 import java.util.Properties;
 
 public class Common {
-	static String ResourceFile = "application.properties";
-	static String MybatisFile = "mybatis-config.xml";
+	static String ResourceFile = "resource/application.properties";
+	static String MybatisFile = "resource/mybatis-config.xml";
 
 	public static Properties getProperties() {
 
