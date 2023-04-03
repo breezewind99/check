@@ -11,7 +11,7 @@ import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 
 public class SqlSessionFactoryManager 
 {
-	private final static String RESOURCE = "resource/mybatis-config.xml";
+	private final static String RESOURCE = "src/main/resource/mybatis-config.xml";
 	private static SqlSessionFactory FACTORY = null;
 	
 	static 

@@ -1,2 +1,4 @@
 # Project exclude paths
 /target/
+/out/artifacts/check_jar/check.jar
+/out/artifacts/application.properties

@@ -1,9 +1,10 @@
 package com.cnettech.util;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.lang.management.ManagementFactory;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
 import java.text.Format;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,7 +17,7 @@ import com.sun.management.OperatingSystemMXBean;
 public class Monitoring extends Thread {
     private boolean running;
     private Properties pros = Common.getProperties();
-
+    String SystemType = System.getProperty("os.name");
     @Override
     public void run() {
         running = true;
@@ -24,21 +25,33 @@ public class Monitoring extends Thread {
             try {
                 String SystemCode = pros.getProperty("SYSTEM_CODE");
                 String SystemName = pros.getProperty("SYSTEM_NAME");
+                if (SystemCode.equals("")) return;
                 int Cpu = (int)Math.round(getCpuUsage());
                 int Mem = (int)Math.round(getMemoryUsage());
                 String DiskStr = "";
                 String Disks[] = pros.getProperty("CHECK_ALARM_DISK").split(",");
                 for (String disk : Disks) {
-                    Map<String, Integer> tempDisk = new HashMap<>();
-                    tempDisk.put(disk, (int)Math.round(getDiskUsage(disk + ":")));
-                    DiskStr += (DiskStr.length() > 0 ? "," : "" ) + disk + ":" + String.format("%d",(int)Math.round(getDiskUsage(disk + ":")));
+//                    Map<String, Integer> tempDisk = new HashMap<>();
+                    int DiskUsage = 0;
+                    if (SystemType.contains("Windows")) {
+                        DiskUsage =(int)Math.round(getDiskUsage(disk + ":"));
+                    } else {
+                        DiskUsage = (int)Math.round(getDiskUsage(disk));
+                    }
+                    DiskStr += (DiskStr.length() > 0 ? "," : "" ) + disk + ":" + String.format("%d",DiskUsage);
                 }
 
                 int ProcessCnt = Integer.parseInt(pros.getProperty("PROCESS_COUNT"));
                 String ProcessStr = "";
                 
                 for (int i = 1; i <= ProcessCnt; i++) {
-                    ProcessStr += getProcInfo(pros.getProperty("PROGRAM_" + String.valueOf(i)));
+                    if (SystemType.contains("Windows")) {
+                        // 윈도우용
+                        ProcessStr += getProcInfo(pros.getProperty("PROGRAM_" + String.valueOf(i)));
+                    } else {
+                        // 리눅스용
+                        ProcessStr += findProcess(pros.getProperty("PROGRAM_" + String.valueOf(i)));
+                    }
                 }
                 //System.out.printf(", HDD : %s", DiskStr);
                 
@@ -47,10 +60,13 @@ public class Monitoring extends Thread {
                 // System.out.printf(", MEM : %d", Mem);
                 // System.out.printf(", HDD : %d", );
                 System.out.printf("CPU : %s, MEM : %s, HDD : %s, Process : %s\r\n", String.valueOf(Cpu), String.valueOf(Mem), DiskStr, ProcessStr);
-                UdpClient.SendMsg("127.0.0.1",4001,"test");
+                //UdpClient.SendMsg("127.0.0.1",4001,"test");
+                SendURL();
+
                 Thread.sleep(1000);
             } catch (Exception e) {
                 e.printStackTrace();
+                return;
             }
         }
     }
@@ -68,6 +84,7 @@ public class Monitoring extends Thread {
     }
     
     private double getDiskUsage(String DriveName) {
+        System.out.println("DriveName = " + DriveName);
         File root = null;
         try {
             root = new File(DriveName);
@@ -118,6 +135,78 @@ public class Monitoring extends Thread {
         } catch (Exception err) {
             err.printStackTrace();
             return "X" + name;
+        }
+    }
+
+    public String  findProcess(String processName) {
+        String filePath = new String("");
+        File directory = new File("/proc");
+        File[] contents = directory.listFiles();
+        boolean found = false;
+
+        for (File f : contents) {
+            if (f.getAbsolutePath().matches("\\/proc\\/\\d+")) {
+                filePath = f.getAbsolutePath().concat("/status");
+                try {
+                    if (readFile(filePath, processName))
+                        found = true;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        if (found) {
+            return "O" + processName;
+        } else {
+            return "X" + processName;
+        }
+    }
+
+    public boolean readFile(String filename, String processName)
+            throws IOException {
+        FileInputStream fstream = new FileInputStream(filename);
+        BufferedReader br = new BufferedReader(new InputStreamReader(fstream));
+        String strLine;
+        strLine = br.readLine().split(":")[1].trim();
+        br.close();
+        if (strLine.equals(processName))
+            return true;
+        else
+            return false;
+    }
+
+    public void SendURL()
+    {
+        try {
+            URL url = new URL("http://192.168.0.115:8888/monitoring/check");
+            String query = "{\"cpu\":0,\"hdd\":0,\"mem\":0,\"systemcode\":\"SystemCode\"}";
+            //It change the apostrophe char to double quote char, to form a correct JSON string
+            query=query.replace("'", "\"");
+            URLConnection urlc = url.openConnection();
+            //It Content Type is so important to support JSON call
+            urlc.setRequestProperty("Content-Type", "application/json");
+            System.out.println("Connection: " + url.toString());
+            //use post mode
+            urlc.setDoOutput(true);
+            urlc.setAllowUserInteraction(false);
+
+            //send query
+            PrintStream ps = new PrintStream(urlc.getOutputStream());
+            ps.print(query);
+            System.out.println("String: " + query);
+            ps.close();
+
+            //get result
+            BufferedReader br = new BufferedReader(new InputStreamReader(urlc.getInputStream()));
+            String l = null;
+            while ((l=br.readLine())!=null) {
+                System.out.printf("String: " + l);
+            }
+            br.close();
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }
