@@ -1,18 +1,17 @@
 package com.cnettech.util;
 
+import com.sun.management.OperatingSystemMXBean;
+
 import java.io.*;
 import java.lang.management.ManagementFactory;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.text.Format;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.text.NumberFormat;
+import java.util.Arrays;
 import java.util.Properties;
-
-import com.sun.management.OperatingSystemMXBean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Monitoring extends Thread {
     private boolean running;
@@ -25,45 +24,51 @@ public class Monitoring extends Thread {
             try {
                 String SystemCode = pros.getProperty("SYSTEM_CODE");
                 String SystemName = pros.getProperty("SYSTEM_NAME");
+                String Alarm_Url[] = pros.getProperty("ALARM_URL").split(",");
+                String Process[] = pros.getProperty("PROCESS").split(",");
+                int Alarm_Sleep = Integer.parseInt(pros.getProperty("ALARM_SLEEP"));
                 if (SystemCode.equals("")) return;
-                int Cpu = (int)Math.round(getCpuUsage());
-                int Mem = (int)Math.round(getMemoryUsage());
+                int Cpu = 0;
+                int Mem = 0;
+                if (SystemType.contains("Windows")) {
+                    Cpu = (int)Math.round(getCpuUsage());
+                    Mem = (int)Math.round(getMemoryUsage());
+                } else {
+                    Cpu = (int)Math.round(getCpuUsage_Linux());
+                    Mem = (int)getMemoryUsage_Linux();
+                }
+
                 String DiskStr = "";
                 String Disks[] = pros.getProperty("CHECK_ALARM_DISK").split(",");
                 for (String disk : Disks) {
-//                    Map<String, Integer> tempDisk = new HashMap<>();
                     int DiskUsage = 0;
                     if (SystemType.contains("Windows")) {
                         DiskUsage =(int)Math.round(getDiskUsage(disk + ":"));
                     } else {
                         DiskUsage = (int)Math.round(getDiskUsage(disk));
                     }
-                    DiskStr += (DiskStr.length() > 0 ? "," : "" ) + disk + ":" + String.format("%d",DiskUsage);
+                    DiskStr += (DiskStr.equals("") ? "" : ",") + disk + ":" + String.format("%d",DiskUsage);
                 }
 
-                int ProcessCnt = Integer.parseInt(pros.getProperty("PROCESS_COUNT"));
                 String ProcessStr = "";
-                
-                for (int i = 1; i <= ProcessCnt; i++) {
+                for (String process : Process) {
                     if (SystemType.contains("Windows")) {
                         // 윈도우용
-                        ProcessStr += getProcInfo(pros.getProperty("PROGRAM_" + String.valueOf(i)));
+                        ProcessStr += (ProcessStr.equals("") ? "" : ",") + getProcInfo(process);
                     } else {
                         // 리눅스용
-                        ProcessStr += findProcess(pros.getProperty("PROGRAM_" + String.valueOf(i)));
+//                        System.out.printf("CPU : %s\r\n", process);
+                        ProcessStr += (ProcessStr.equals("") ? "" : ",") + findProcess(process);
                     }
                 }
-                //System.out.printf(", HDD : %s", DiskStr);
-                
-                //Map<String, String> Disk = (int)Math.round(getDiskUsage("c:"));
-                // System.out.printf("CPU : %d", Cpu);
-                // System.out.printf(", MEM : %d", Mem);
-                // System.out.printf(", HDD : %d", );
-                System.out.printf("CPU : %s, MEM : %s, HDD : %s, Process : %s\r\n", String.valueOf(Cpu), String.valueOf(Mem), DiskStr, ProcessStr);
-                //UdpClient.SendMsg("127.0.0.1",4001,"test");
-                SendURL();
 
-                Thread.sleep(1000);
+                System.out.printf("CPU : %s, MEM : %s, HDD : %s, Process : %s\r\n", String.valueOf(Cpu), String.valueOf(Mem), DiskStr, ProcessStr);
+
+                for (String alarm : Alarm_Url) {
+                    SendURL(alarm, SystemName, SystemCode, String.valueOf(Cpu), String.valueOf(Mem), DiskStr, ProcessStr);
+                }
+
+                Thread.sleep(Alarm_Sleep);
             } catch (Exception e) {
                 e.printStackTrace();
                 return;
@@ -73,7 +78,33 @@ public class Monitoring extends Thread {
 
     private double getCpuUsage() {
         OperatingSystemMXBean osBean = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean.class);
-        return osBean.getSystemCpuLoad() * 100;
+        return osBean.getSystemCpuLoad() * 1000;
+    }
+
+    private double getCpuUsage_Linux() {
+        double cpuUsage = 0;
+        try {
+            Process process = Runtime.getRuntime().exec("top -b -n 1");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.startsWith("%Cpu(s):")) {
+                    System.out.println("line: " + line);
+                    String[] cpuUsageInfo = line.split("\\s+");
+                    cpuUsage = Double.parseDouble(cpuUsageInfo[1].replace(",", ""));
+//                    System.out.println("CPU Usage: " + cpuUsage + "%");
+                    break;
+                }
+            }
+
+            reader.close();
+            process.destroy();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        return cpuUsage;
     }
     
     private double getMemoryUsage() {
@@ -82,9 +113,38 @@ public class Monitoring extends Thread {
         double Total_Memory_Size = osBean.getTotalPhysicalMemorySize();
         return (100 - ((Free_Memory_Size / Total_Memory_Size) * 100));
     }
+
+    private double getMemoryUsage_Linux() {
+        double availMem=0;
+        double totalMem=0;
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("/proc/meminfo"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                //MemTotal
+                if (line.startsWith("MemTotal:")) {
+                    String[] tokens = line.split("\\s+");
+                    totalMem = Double.parseDouble(tokens[1]) / 1024;
+                }
+                if (line.startsWith("MemAvailable:")) {
+                    String[] tokens = line.split("\\s+");
+                    availMem = Double.parseDouble(tokens[1]) / 1024;
+                }
+            }
+            br.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        double Used = totalMem - availMem;
+//        System.out.println("Total memory: " + totalMem + " kB");
+//        System.out.println("Available memory: " + availMem + " kB");
+//        System.out.println("Used memory: " + Used + " kB");
+        return (100-((availMem / totalMem) * 100));
+    }
     
     private double getDiskUsage(String DriveName) {
-        System.out.println("DriveName = " + DriveName);
+//        System.out.println("DriveName = " + DriveName);
         File root = null;
         try {
             root = new File(DriveName);
@@ -151,7 +211,6 @@ public class Monitoring extends Thread {
                     if (readFile(filePath, processName))
                         found = true;
                 } catch (IOException e) {
-                    e.printStackTrace();
                 }
             }
         }
@@ -175,32 +234,32 @@ public class Monitoring extends Thread {
             return false;
     }
 
-    public void SendURL()
+    public void SendURL(String CheckUrl, String SystemName, String SystemCode, String CPU, String MEM, String HDD, String Process)
     {
         try {
-            URL url = new URL("http://192.168.0.115:8888/monitoring/check");
-            String query = "{\"cpu\":0,\"hdd\":0,\"mem\":0,\"systemcode\":\"SystemCode\"}";
-            //It change the apostrophe char to double quote char, to form a correct JSON string
-            query=query.replace("'", "\"");
+
+            URL url = new URL(CheckUrl);
+
+            String JsonData = "{'CPU':"+ CPU +",'HDD':'" + HDD + "','MEM':" + MEM + ",'PROCESS':'"+ Process + "','SystemName':'" + SystemName +"','SystemCode':'" + SystemCode + "'}";
+            JsonData=JsonData.replace("'", "\"");
+            System.out.println("JsonData: " + JsonData);
+
             URLConnection urlc = url.openConnection();
-            //It Content Type is so important to support JSON call
             urlc.setRequestProperty("Content-Type", "application/json");
             System.out.println("Connection: " + url.toString());
-            //use post mode
             urlc.setDoOutput(true);
             urlc.setAllowUserInteraction(false);
 
-            //send query
             PrintStream ps = new PrintStream(urlc.getOutputStream());
-            ps.print(query);
-            System.out.println("String: " + query);
+            ps.print(JsonData);
+
             ps.close();
 
             //get result
             BufferedReader br = new BufferedReader(new InputStreamReader(urlc.getInputStream()));
             String l = null;
             while ((l=br.readLine())!=null) {
-                System.out.printf("String: " + l);
+                System.out.println("String: " + l);
             }
             br.close();
         } catch (MalformedURLException e) {

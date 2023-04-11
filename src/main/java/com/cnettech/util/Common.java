@@ -85,7 +85,7 @@ public class Common {
 			} catch (Exception e) {
 			}
 			String SystemType = System.getProperty("os.name");
-			System.out.println("System Type = " + SystemType);
+//			System.out.println("System Type = " + SystemType);
 //			System.out.println("PROGRAM_DIRECTORY : " + PROGRAM_DIRECTORY);
 			if (SystemType.contains("Windows")) {
 				if (PROGRAM_DIRECTORY.startsWith("/"))
